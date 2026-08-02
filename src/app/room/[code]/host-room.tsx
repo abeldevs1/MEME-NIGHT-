@@ -8,6 +8,7 @@ import {
   ImagePlus,
   ListOrdered,
   MessageSquareQuote,
+  PenLine,
   Play,
   RefreshCw,
   SkipForward,
@@ -182,6 +183,24 @@ export function HostRoom({ code }: HostRoomProps) {
       if (author) await postSystem(`🎤 ${author}'s turn — they set the prompt: "${prompt}"`);
     } catch (e) {
       setError(errorMessage(e, "Couldn't start the next round."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changePrompt = async (newPrompt: string) => {
+    if (!room || !newPrompt.trim()) return;
+    setBusy(true);
+    try {
+      await updateRoom({ current_prompt: newPrompt.trim() });
+      roomState.send("phase", {
+        status: "submitting",
+        prompt: newPrompt.trim(),
+        round: room.round_number,
+        twist: twist ?? null,
+      });
+    } catch (e) {
+      setError(errorMessage(e, "Couldn't change the prompt."));
     } finally {
       setBusy(false);
     }
@@ -823,6 +842,7 @@ export function HostRoom({ code }: HostRoomProps) {
                       mySubmission={myHostSubmission}
                       onPick={() => setPickerOpen(true)}
                       onReveal={reveal}
+                      onChangePrompt={changePrompt}
                       busy={busy}
                     />
                   ))}
@@ -846,6 +866,7 @@ export function HostRoom({ code }: HostRoomProps) {
                       roster.find((p) => p.player_id === room.judge_player_id)?.player_name ?? "The judge"
                     }
                     iAmJudge={room.judge_player_id === me.playerId}
+                    votesByPlayer={votesByPlayer}
                     onPick={resolveRound}
                     busy={busy}
                   />
@@ -1180,6 +1201,7 @@ function SubmittingView({
   mySubmission,
   onPick,
   onReveal,
+  onChangePrompt,
   busy,
 }: {
   prompt: string | null;
@@ -1190,8 +1212,11 @@ function SubmittingView({
   mySubmission: { player_id: string; player_name: string; meme_url: string } | null;
   onPick: () => void;
   onReveal: () => void;
+  onChangePrompt: (p: string) => void;
   busy: boolean;
 }) {
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  const [promptDraft, setPromptDraft] = useState("");
   const submittedCount = submissions.length;
   const total = Math.max(1, roster.length);
   const allIn = total > 0 && submittedCount >= total;
@@ -1200,12 +1225,56 @@ function SubmittingView({
     <div className="flex flex-col gap-5">
       <TwistBanner twist={twist} />
       <div className="rounded-3xl border border-edge bg-surface p-6 text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Prompt</p>
-        <p className="mt-3 font-display text-3xl font-extrabold leading-snug tracking-tight text-zinc-50 sm:text-4xl">
-          {prompt}
-        </p>
-        {promptAuthor && (
-          <p className="mt-2 text-xs font-semibold text-accent">Asked by @{promptAuthor}</p>
+        <div className="flex items-center justify-center gap-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Prompt</p>
+          {!editingPrompt && (
+            <button
+              onClick={() => { setPromptDraft(prompt ?? ""); setEditingPrompt(true); }}
+              className="rounded-full p-1 text-zinc-500 transition-colors hover:bg-surface-2 hover:text-zinc-300"
+              title="Change prompt"
+            >
+              <PenLine className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {editingPrompt ? (
+          <div className="mt-3 flex flex-col gap-3">
+            <textarea
+              autoFocus
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-2xl border border-accent/50 bg-surface-2 p-3 text-center font-display text-xl font-extrabold leading-snug tracking-tight text-zinc-50 focus:border-accent focus:outline-none"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="md"
+                className="flex-1"
+                disabled={!promptDraft.trim() || busy}
+                onClick={() => { onChangePrompt(promptDraft); setEditingPrompt(false); }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Update prompt
+              </Button>
+              <Button
+                size="md"
+                variant="ghost"
+                onClick={() => setEditingPrompt(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="mt-3 font-display text-3xl font-extrabold leading-snug tracking-tight text-zinc-50 sm:text-4xl">
+              {prompt}
+            </p>
+            {promptAuthor && (
+              <p className="mt-2 text-xs font-semibold text-accent">Asked by @{promptAuthor}</p>
+            )}
+          </>
         )}
       </div>
 
@@ -1644,6 +1713,7 @@ function MemeJudgingView({
   captions,
   judgeName,
   iAmJudge,
+  votesByPlayer,
   onPick,
   busy,
 }: {
@@ -1651,6 +1721,7 @@ function MemeJudgingView({
   captions: AnonymousCaption[];
   judgeName: string;
   iAmJudge: boolean;
+  votesByPlayer: Map<string, number>;
   onPick: (captionId: string) => void;
   busy: boolean;
 }) {
@@ -1684,16 +1755,25 @@ function MemeJudgingView({
 
       {captions.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 items-start">
-          {captions.map((c, i) => (
-            <div key={c.id}>
-              <CaptionCard
-                text={c.text}
-                onClick={() => onPick(c.id)}
-                disabled={busy}
-                className={i % 2 ? "rotate-1" : "-rotate-1"}
-              />
-            </div>
-          ))}
+          {captions.map((c, i) => {
+            const votes = votesByPlayer.get(c.id) ?? 0;
+            return (
+              <div key={c.id} className="relative">
+                <CaptionCard
+                  text={c.text}
+                  onClick={() => onPick(c.id)}
+                  disabled={busy}
+                  className={i % 2 ? "rotate-1" : "-rotate-1"}
+                />
+                {votes > 0 && (
+                  <span className="absolute -right-2 -top-2 flex items-center gap-1 rounded-full bg-zinc-950/90 px-2 py-0.5 text-xs font-bold text-accent shadow-xl ring-1 ring-white/10 backdrop-blur-sm z-10">
+                    <Sparkles className="h-3 w-3" />
+                    {votes}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

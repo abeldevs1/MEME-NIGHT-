@@ -387,6 +387,36 @@ export function PlayerView({ code }: PlayerViewProps) {
     }
   };
 
+  const castCaptionVote = async (caption: AnonymousCaption) => {
+    if (!room || iAmJudge || judgePicked) return;
+    setBusy(true);
+    try {
+      const supabase = requireSupabase();
+      const round = room.round_number;
+      // Using caption.id as the target_player_id and meme_url so it satisfies the NOT NULL constraint and allows tracking votes per caption
+      const { error } = await supabase.from("votes").upsert(
+        {
+          room_code: code,
+          round_number: round,
+          voter_player_id: me.playerId,
+          target_player_id: caption.id,
+          meme_url: caption.id,
+        },
+        { onConflict: "room_code,round_number,voter_player_id" },
+      );
+      if (!error) {
+        roomState.send("vote", {
+          round,
+          voter_player_id: me.playerId,
+          target_player_id: caption.id,
+          meme_url: caption.id,
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!configured) return <ConfigScreen />;
   if (loading) return <LoadingScreen />;
   if (notFound || !room) return <NotFoundScreen code={code} />;
@@ -489,7 +519,9 @@ export function PlayerView({ code }: PlayerViewProps) {
                 iAmJudge={iAmJudge}
                 captions={revealedCaptions ?? []}
                 picked={judgePicked}
+                myVoteTargetId={myVote?.target_player_id ?? null}
                 onPick={judgePickCaption}
+                onVote={castCaptionVote}
               />
             )}
 
@@ -513,7 +545,7 @@ export function PlayerView({ code }: PlayerViewProps) {
                 items={revealList}
                 myPlayerId={me.playerId}
                 myVoteTargetId={myVote?.target_player_id ?? null}
-                winner={winner ? { name: winner.winner_player_name ?? "Someone", iWon } : null}
+                winner={winner ? { name: (winner as Round).winner_player_name ?? "Someone", iWon } : null}
                 onVote={castVote}
                 onFullscreen={openFullscreen}
               />
@@ -995,13 +1027,17 @@ function MemePlayerRevealView({
   iAmJudge,
   captions,
   picked,
+  myVoteTargetId,
   onPick,
+  onVote,
 }: {
   room: Room;
   iAmJudge: boolean;
   captions: AnonymousCaption[];
   picked: boolean;
+  myVoteTargetId?: string | null;
   onPick: (caption: AnonymousCaption) => void;
+  onVote?: (caption: AnonymousCaption) => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -1027,10 +1063,16 @@ function MemePlayerRevealView({
         </div>
       )}
 
-      {!iAmJudge && (
+      {!iAmJudge && !myVoteTargetId && (
         <div className="flex items-center gap-2 rounded-2xl border border-edge bg-surface px-4 py-3">
           <Sparkles className="h-4 w-4 shrink-0 text-zinc-500" />
-          <p className="text-sm text-zinc-400">The judge is deciding… cross your fingers.</p>
+          <p className="text-sm text-zinc-400">The judge is deciding… vote for your favorite in the meantime!</p>
+        </div>
+      )}
+      {!iAmJudge && myVoteTargetId && (
+        <div className="flex items-center gap-2 rounded-2xl border border-edge bg-surface px-4 py-3">
+          <ThumbsUp className="h-4 w-4 shrink-0 text-amber-400" />
+          <p className="text-sm text-amber-200">Vote locked in. Let's see who the judge picks!</p>
         </div>
       )}
 
@@ -1043,13 +1085,24 @@ function MemePlayerRevealView({
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {captions.map((c, i) => (
-              <CaptionCard
-                key={c.id}
-                text={c.text}
-                onClick={iAmJudge && !picked ? () => onPick(c) : undefined}
-                disabled={!iAmJudge || picked}
-                className={cn(i % 2 ? "rotate-1" : "-rotate-1", iAmJudge && !picked && "cursor-pointer")}
-              />
+              <div key={c.id} className="relative">
+                <CaptionCard
+                  text={c.text}
+                  onClick={iAmJudge && !picked ? () => onPick(c) : (!iAmJudge && !myVoteTargetId && onVote ? () => onVote(c) : undefined)}
+                  disabled={(iAmJudge && picked) || (!iAmJudge && myVoteTargetId !== null && myVoteTargetId !== c.id)}
+                  className={cn(
+                    i % 2 ? "rotate-1" : "-rotate-1", 
+                    iAmJudge && !picked && "cursor-pointer",
+                    !iAmJudge && !myVoteTargetId && "cursor-pointer active:scale-[0.98]",
+                    myVoteTargetId === c.id && "ring-2 ring-amber-400 border-amber-400/50"
+                  )}
+                />
+                {!iAmJudge && myVoteTargetId === c.id && (
+                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-zinc-950 shadow-lg z-10">
+                    <ThumbsUp className="h-3 w-3" />
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         </div>
