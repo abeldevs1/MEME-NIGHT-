@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #bef264;
+  --color-accent-strong: #d9f99d;
+  --color-accent-dim: #3f4a17;
+  --color-surface: #1c1917;
+  --color-surface-2: #26221f;
+  --color-edge: #332f2b;
+  --color-edge-2: #57534e;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  --font-display: var(--font-meme-display);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-stone-950 text-stone-100 antialiased;
+  background-color: #0c0a09;
+  background-image:
+    radial-gradient(60rem 30rem at 110% -10%, rgb(190 242 100 / 0.09), transparent 60%),
+    radial-gradient(50rem 28rem at -20% 15%, rgb(244 114 182 / 0.07), transparent 60%),
+    radial-gradient(42rem 26rem at 55% 120%, rgb(34 211 238 / 0.06), transparent 60%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+@utility font-display {
+  font-family: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility text-glow {
+  text-shadow: 0 0 24px rgb(190 242 100 / 0.45);
+}
+
+@utility card-sticker {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -8px;
+    width: 54px;
+    height: 16px;
+    transform: translateX(-50%) rotate(-2deg);
+    background: rgb(190 242 100 / 0.14);
+    border: 1px solid rgb(190 242 100 / 0.25);
+    border-radius: 3px;
+    pointer-events: none;
+  }
+}
+
+@keyframes ping-slow {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.animate-wiggle {
+  animation: wiggle 2.4s ease-in-out infinite;
+}
