@@ -62,7 +62,7 @@ interface TelegramSticker {
 
 export async function GET(req: NextRequest) {
   const pack = parsePack(req.nextUrl.searchParams.get("pack") ?? "");
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
   if (!pack) {
     return NextResponse.json(

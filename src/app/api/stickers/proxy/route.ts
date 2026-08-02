@@ -6,7 +6,7 @@ export const runtime = "edge";
 /** Streams a Telegram sticker file through the server so the bot token never leaks. */
 export async function GET(req: NextRequest) {
   const f = req.nextUrl.searchParams.get("f");
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token || !f) {
     return new Response("missing params", { status: 400 });
   }
