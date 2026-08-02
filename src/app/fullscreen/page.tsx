@@ -1,5 +1,7 @@
 import { FullScreenView } from "./fullscreen-view";
 
+export const runtime = "edge";
+
 export default async function FullscreenRoute({
   searchParams,
 }: {
