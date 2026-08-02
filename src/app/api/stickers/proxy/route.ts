@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 /** Streams a Telegram sticker file through the server so the bot token never leaks. */
 export async function GET(req: NextRequest) {
